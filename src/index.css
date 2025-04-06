@@ -2,14 +2,14 @@
 
 
 /* Custom styles */
-@layer base {
+/* @layer base {
   body {
     @apply bg-slate-900 text-white;
   }
-}
+} */
 
 @layer components {
   .glass-effect {
-    @apply bg-slate-800/80 ; /* /80 is 80% opacity. */ /* Took out backdrop-blur-md backdrop-filter */
+    @apply bg-white ; /* /80 is 80% opacity. */ /* Took out backdrop-blur-md backdrop-filter */
   }
 }
