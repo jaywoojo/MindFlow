@@ -1,20 +1,51 @@
 // src/components/layout/Sidebar.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTasks } from '../../hooks/useTasks';
 
-// Updated to include onAddTask prop
 const Sidebar = ({ onLogout, onAddTask }) => {
   const { currentUser } = useAuth();
-  const [tasksCompleted, setTasksCompleted] = useState(4);
-  const [totalTasks, setTotalTasks] = useState(7);
-  const [focusTime, setFocusTime] = useState(2.5);
-  const [taskStreak, setTaskStreak] = useState(5);
-  const [completionRate, setCompletionRate] = useState(68);
+  const { tasks } = useTasks();
+  const [stats, setStats] = useState({
+    tasksCompleted: 0,
+    totalTasks: 0,
+    completionRate: 0
+  });
 
   // Get the user's name and photo URL from their Google profile
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User';
   const photoURL = currentUser?.photoURL;
+
+  // Calculate task statistics
+  useEffect(() => {
+    if (!tasks.length) return;
+
+    // Get today's date (without time)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Filter tasks due today
+    const todaysTasks = tasks.filter(task => {
+      const taskDate = new Date(task.dueDate);
+      taskDate.setHours(0, 0, 0, 0);
+      return taskDate.getTime() === today.getTime();
+    });
+    
+    // Count completed tasks for today
+    const completedToday = todaysTasks.filter(task => task.status === 'completed').length;
+    
+    // Calculate completion rate for today's tasks
+    const todayCompletionRate = todaysTasks.length > 0 
+      ? Math.round((completedToday / todaysTasks.length) * 100) 
+      : 0;
+    
+    setStats({
+      tasksCompleted: completedToday,
+      totalTasks: todaysTasks.length,
+      completionRate: todayCompletionRate
+    });
+  }, [tasks]);
 
   return (
     <aside className="w-64 min-h-screen overflow-y-auto glass-effect">
@@ -57,27 +88,19 @@ const Sidebar = ({ onLogout, onAddTask }) => {
           <div className="w-full h-2 bg-gray-200 rounded-full mb-2">
             <div 
               className="h-2 bg-green-600 rounded-full" 
-              style={{ width: `${(tasksCompleted / totalTasks) * 100}%` }}
+              style={{ width: `${(stats.tasksCompleted / stats.totalTasks) * 100}%` }}
             ></div>
           </div>
-          <p className="text-sm text-gray-600">{tasksCompleted}/{totalTasks} Tasks Complete</p>
+          <p className="text-sm text-gray-600">{stats.tasksCompleted}/{stats.totalTasks} Tasks Complete</p>
         </div>
 
         {/* Statistics */}
         <div>
-          <p className="text-sm text-gray-600 mb-2">STATISTICS</p>
+          <p className="text-sm text-gray-600 mb-2">TODAY'S STATISTICS</p>
           <div className="space-y-4">
             <div className="flex justify-between py-2 border-b border-gray-300">
-              <span className="text-sm text-gray-600">Focus Time</span>
-              <span className="text-sm text-gray-800">{focusTime} hrs</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-300">
-              <span className="text-sm text-gray-600">Task Streak</span>
-              <span className="text-sm text-gray-800">{taskStreak} days</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-300">
               <span className="text-sm text-gray-600">Completion Rate</span>
-              <span className="text-sm text-gray-800">{completionRate}%</span>
+              <span className="text-sm text-gray-800">{stats.completionRate}%</span>
             </div>
           </div>
         </div>

@@ -2,80 +2,20 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { motion } from 'framer-motion';
+import { useTasks } from '../../hooks/useTasks';
 
 const MindMap = ({ onSelectTask }) => {
   const svgRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-
-  // Sample data - we'll replace this with state management later
-  const data = {
-    id: 'today',
-    name: 'TODAY',
-    type: 'central',
-    children: [
-      {
-        id: 'work',
-        name: 'WORK',
-        type: 'category',
-        color: '#8b5cf6',
-        children: [
-          { id: 'task1', name: 'Client Meeting', type: 'task' },
-          { id: 'task2', name: 'UX Wireframes', type: 'task', rolloverCount: 3 },
-          { id: 'task3', name: 'Team Standup', type: 'task', status: 'completed' },
-        ]
-      },
-      {
-        id: 'personal',
-        name: 'PERSONAL',
-        type: 'category',
-        color: '#ec4899',
-        children: [
-          { id: 'task4', name: 'Call Mom', type: 'task' },
-          { id: 'task5', name: 'Grocery Shopping', type: 'task', status: 'completed' }
-        ]
-      },
-      {
-        id: 'health',
-        name: 'HEALTH',
-        type: 'category',
-        color: '#10b981',
-        children: [
-          { id: 'task6', name: '30min Workout', type: 'task', streakCount: 5 },
-          { id: 'task7', name: 'Meditation', type: 'task' }
-        ]
-      },
-      {
-        id: 'finance',
-        name: 'FINANCE',
-        type: 'category',
-        color: '#ef4444',
-        children: [
-          { id: 'task8', name: 'Pay Rent', type: 'task', dueDate: 'tomorrow' },
-          { id: 'task9', name: 'Budget Review', type: 'task', status: 'completed' }
-        ]
-      },
-      {
-        id: 'learning',
-        name: 'LEARNING',
-        type: 'category',
-        color: '#f59e0b',
-        children: [
-          { id: 'task10', name: 'React Course', type: 'task', progress: '3/8' },
-          { id: 'task11', name: 'Book Chapter Chapter Chapter', type: 'task' }
-        ]
-      },
-      {
-        id: 'projects',
-        name: 'PROJECTS',
-        type: 'category',
-        color: '#4f46e5',
-        children: [
-          { id: 'task12', name: 'Portfolio Update', type: 'task', rolloverCount: 7 },
-          { id: 'task13', name: 'Side Project', type: 'task' }
-        ]
-      }
-    ]
-  };
+  const { tasks, loading } = useTasks();
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Date navigation - previous 2 days, today, and next 3 days
+  const dateRange = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - 2 + i);
+    return date;
+  });
 
   useEffect(() => {
     // Handle window resize
@@ -95,8 +35,55 @@ const MindMap = ({ onSelectTask }) => {
   }, []);
 
   useEffect(() => {
-    if (!dimensions.width || !dimensions.height) return;
+    if (!dimensions.width || !dimensions.height || loading) return;
 
+    // Transform the tasks data into the hierarchical structure needed for the mind map
+    const transformTasksToMindMapData = () => {
+      // Get all unique categories from tasks
+      const categories = [...new Set(tasks.map(task => task.category))];
+      
+      // Create the hierarchical structure
+      const data = {
+        id: 'today',
+        name: 'TODAY',
+        type: 'central',
+        children: categories.map(category => {
+          // Filter tasks by category and the selected date
+          const categoryTasks = tasks.filter(task => {
+            const taskDate = new Date(task.dueDate);
+            const selectedDateStr = selectedDate.toDateString();
+            const taskDateStr = taskDate.toDateString();
+            
+            return task.category === category && taskDateStr === selectedDateStr;
+          });
+          
+          // Skip empty categories
+          if (categoryTasks.length === 0) return null;
+          
+          // Get color based on category
+          const color = getCategoryColor(category);
+          
+          return {
+            id: category,
+            name: category.toUpperCase(),
+            type: 'category',
+            color,
+            children: categoryTasks.map(task => ({
+              id: task.id,
+              name: task.title,
+              type: 'task',
+              status: task.status,
+              rolloverCount: task.rolloverCount,
+              dueDate: task.dueDate,
+              priority: task.priority
+            }))
+          };
+        }).filter(Boolean) // Remove null categories (empty ones)
+      };
+      
+      return data;
+    };
+    
     // Function to truncate text
     const truncateText = (text, maxLength) => {
       if (text.length <= maxLength) return text;
@@ -106,36 +93,33 @@ const MindMap = ({ onSelectTask }) => {
     // Clear previous SVG content
     d3.select(svgRef.current).selectAll('*').remove();
 
+    // Get the transformed data
+    const data = transformTasksToMindMapData();
+    
+    // If there are no children (no categories with tasks), show a message
+    if (data.children.length === 0) {
+      const svg = d3.select(svgRef.current);
+      
+      // Add dot grid background
+      createDotGridBackground(svg, dimensions);
+      
+      // Add "No tasks" message
+      svg.append('text')
+        .attr('x', dimensions.width / 2)
+        .attr('y', dimensions.height / 2)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '16px')
+        .attr('fill', '#6b7280')
+        .text('No tasks for this day. Add a task to get started!');
+        
+      return;
+    }
+
     // Create SVG
     const svg = d3.select(svgRef.current);
     
-    // Create dot grid pattern
-    const defs = svg.append('defs');
-    const pattern = defs.append('pattern')
-      .attr('id', 'dots')
-      .attr('width', 30)
-      .attr('height', 30)
-      .attr('patternUnits', 'userSpaceOnUse');
-    
-    // Add dots to the pattern
-    pattern.append('circle')
-      .attr('cx', 15)
-      .attr('cy', 15)
-      .attr('r', 1)
-      .attr('fill', '#9ca3af');  // Lighter dot color
-    
-    // Apply the pattern to a background rectangle
-    svg.append('rect')
-      .attr('width', dimensions.width)
-      .attr('height', dimensions.height)
-      .attr('fill', '#f5f5f5')  // Light gray background
-      .attr('stroke', 'none');
-    
-    svg.append('rect')
-      .attr('width', dimensions.width)
-      .attr('height', dimensions.height)
-      .attr('fill', 'url(#dots)')
-      .attr('stroke', 'none');
+    // Create dot grid background
+    createDotGridBackground(svg, dimensions);
     
     // Create a container group for zoom
     const g = svg.append('g');
@@ -165,7 +149,7 @@ const MindMap = ({ onSelectTask }) => {
     const centralRadius = 40;
     const categoryRadius = 20;
     const taskHeight = 24; // Height for task pills
-    const categoryDistance = 240; //200
+    const categoryDistance = 240;
     const taskDistance = 160;
     
     // Creating the layers for proper z-index:
@@ -174,12 +158,12 @@ const MindMap = ({ onSelectTask }) => {
     // 2. Nodes layer (top)
     const nodesLayer = g.append('g').attr('class', 'nodes-layer');
     
-    // Create central node - keeping the gray color for the central node
+    // Create central node
     nodesLayer.append('circle')
       .attr('cx', centerX)
       .attr('cy', centerY)
       .attr('r', centralRadius)
-      .attr('fill', '#4b5563')  // Gray for central node
+      .attr('fill', '#4b5563')
       .attr('class', 'central-node');
       
     nodesLayer.append('text')
@@ -187,10 +171,10 @@ const MindMap = ({ onSelectTask }) => {
       .attr('y', centerY)
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
-      .attr('fill', '#f3f4f6')  // Changed from white to light gray
+      .attr('fill', '#f3f4f6')
       .attr('font-weight', 'bold')
       .attr('font-size', '16px')
-      .text('TODAY');
+      .text(formatDateDisplay(selectedDate));
     
     // Calculate positions for category nodes
     data.children.forEach((category, i) => {
@@ -238,7 +222,7 @@ const MindMap = ({ onSelectTask }) => {
         .attr('y', y)
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'middle')
-        .attr('fill', '#f3f4f6')  // Changed from white to light gray
+        .attr('fill', '#f3f4f6')
         .attr('font-weight', 'bold')
         .attr('font-size', '14px')
         .text(category.name);
@@ -301,7 +285,7 @@ const MindMap = ({ onSelectTask }) => {
             .attr('y', taskY)
             .attr('text-anchor', 'middle')
             .attr('dominant-baseline', 'middle')
-            .attr('fill', '#f3f4f6')  // Changed from white to light gray
+            .attr('fill', '#f3f4f6')
             .attr('font-size', '10px')
             .attr('text-decoration', task.status === 'completed' ? 'line-through' : 'none')
             .text(truncatedText);
@@ -331,7 +315,7 @@ const MindMap = ({ onSelectTask }) => {
             tooltipText
             .attr('x', taskX)
             .attr('y', taskY - 27.5)
-            .attr('dominant-baseline', 'middle')  // Add this line for vertical centering
+            .attr('dominant-baseline', 'middle')
             .style('visibility', 'visible');
 
             // Tooltip background sized to fit the text
@@ -369,14 +353,14 @@ const MindMap = ({ onSelectTask }) => {
               .attr('cx', checkX)
               .attr('cy', checkY)
               .attr('r', 7)
-              .attr('fill', '#10b981');  // Keep green for checkmarks
+              .attr('fill', '#10b981');  // Green for checkmarks
             
             taskGroup.append('text')
               .attr('x', checkX)
               .attr('y', checkY)
               .attr('text-anchor', 'middle')
               .attr('dominant-baseline', 'middle')
-              .attr('fill', '#f3f4f6')  // Changed from white to light gray
+              .attr('fill', '#f3f4f6')
               .attr('font-weight', 'bold')
               .attr('font-size', '9px')
               .text('✓');
@@ -391,35 +375,82 @@ const MindMap = ({ onSelectTask }) => {
               .attr('fill', 'rgba(0, 0, 0, 0.6)')
               .attr('font-size', '9px')
               .text(`${task.rolloverCount} days rollover`);
-          } else if (task.streakCount) {
+          } else if (task.priority === 'high') {
             taskGroup.append('text')
               .attr('x', taskX)
               .attr('y', taskY + taskHeight/2 + 12)
               .attr('text-anchor', 'middle')
-              .attr('fill', 'rgba(0, 0, 0, 0.6)')
+              .attr('fill', '#ef4444')
               .attr('font-size', '9px')
-              .text(`${task.streakCount} days streak`);
-          } else if (task.progress) {
-            taskGroup.append('text')
-              .attr('x', taskX)
-              .attr('y', taskY + taskHeight/2 + 12)
-              .attr('text-anchor', 'middle')
-              .attr('fill', 'rgba(0, 0, 0, 0.6)')
-              .attr('font-size', '9px')
-              .text(`Module ${task.progress}`);
-          } else if (task.dueDate) {
-            taskGroup.append('text')
-              .attr('x', taskX)
-              .attr('y', taskY + taskHeight/2 + 12)
-              .attr('text-anchor', 'middle')
-              .attr('fill', 'rgba(0, 0, 0, 0.6)')
-              .attr('font-size', '9px')
-              .text(`Due ${task.dueDate}`);
+              .attr('font-weight', 'bold')
+              .text(`HIGH PRIORITY`);
           }
         });
       }
     });
-  }, [dimensions, onSelectTask]);
+  }, [dimensions, tasks, loading, selectedDate, onSelectTask]);
+
+  // Helper functions
+  const getCategoryColor = (category) => {
+    const colors = {
+      work: '#8b5cf6',
+      personal: '#ec4899',
+      health: '#10b981',
+      finance: '#ef4444',
+      learning: '#f59e0b',
+      projects: '#4f46e5'
+    };
+    
+    return colors[category] || '#3b82f6';
+  };
+
+  const createDotGridBackground = (svg, dimensions) => {
+    // Create dot grid pattern
+    const defs = svg.append('defs');
+    const pattern = defs.append('pattern')
+      .attr('id', 'dots')
+      .attr('width', 30)
+      .attr('height', 30)
+      .attr('patternUnits', 'userSpaceOnUse');
+    
+    // Add dots to the pattern
+    pattern.append('circle')
+      .attr('cx', 15)
+      .attr('cy', 15)
+      .attr('r', 1)
+      .attr('fill', '#9ca3af');  // Lighter dot color
+    
+    // Apply the pattern to a background rectangle
+    svg.append('rect')
+      .attr('width', dimensions.width)
+      .attr('height', dimensions.height)
+      .attr('fill', '#f5f5f5')  // Light gray background
+      .attr('stroke', 'none');
+    
+    svg.append('rect')
+      .attr('width', dimensions.width)
+      .attr('height', dimensions.height)
+      .attr('fill', 'url(#dots)')
+      .attr('stroke', 'none');
+  };
+
+  const formatDateDisplay = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
+    if (compareDate.getTime() === today.getTime()) {
+      return 'TODAY';
+    }
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleDateChange = (date) => {
+    setSelectedDate(date);
+  };
 
   return (
     <motion.div 
@@ -432,16 +463,25 @@ const MindMap = ({ onSelectTask }) => {
       
       {/* Timeline navigation */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-full px-4 py-2 flex space-x-8 shadow-md">
-        {['Mar 16', 'Mar 17', 'TODAY', 'Mar 19', 'Mar 20', 'Mar 21'].map((day, index) => (
-          <div key={index} className="flex flex-col items-center">
+        {dateRange.map((date, index) => {
+          const isSelected = date.toDateString() === selectedDate.toDateString();
+          return (
             <div 
-              className={`w-5 h-5 rounded-full ${day === 'TODAY' ? 'bg-gray-700' : 'bg-gray-300'} flex items-center justify-center text-xs`}
+              key={index} 
+              className="flex flex-col items-center cursor-pointer"
+              onClick={() => handleDateChange(date)}
             >
-              {day === 'TODAY' ? '18' : ''}
+              <div 
+                className={`w-5 h-5 rounded-full ${isSelected ? 'bg-gray-700' : 'bg-gray-300'} flex items-center justify-center text-xs`}
+              >
+                {date.getDate()}
+              </div>
+              <span className={`text-xs mt-1 ${isSelected ? 'text-gray-800' : 'text-gray-500'}`}>
+                {formatDateDisplay(date)}
+              </span>
             </div>
-            <span className={`text-xs mt-1 ${day === 'TODAY' ? 'text-gray-800' : 'text-gray-500'}`}>{day}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </motion.div>
   );

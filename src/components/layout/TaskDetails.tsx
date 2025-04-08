@@ -1,29 +1,6 @@
 // src/components/layout/TaskDetails.jsx
-import { useState } from 'react';
-
-// This is a placeholder function - we'll replace with actual data later
-const getTaskById = (id) => {
-  const tasks = {
-    task1: { 
-      id: 'task1', 
-      title: 'Client Meeting', 
-      category: 'work', 
-      dueDate: 'March 18, 2025',
-      priority: 'medium',
-      description: 'Meeting with client to discuss project requirements and timeline. Prepare presentation slides and project proposal.',
-    },
-    task2: { 
-      id: 'task2', 
-      title: 'UX Wireframes', 
-      category: 'work', 
-      dueDate: 'March 18, 2025',
-      priority: 'high',
-      description: 'Create wireframes for the new dashboard interface. Include mobile and desktop versions with responsive design considerations.',
-    }
-  };
-  
-  return tasks[id];
-};
+import { useState, useEffect } from 'react';
+import { useTasks } from '../../hooks/useTasks';
 
 const getCategoryColor = (category) => {
   const colors = {
@@ -48,8 +25,45 @@ const getPriorityColor = (priority) => {
   return colors[priority] || '#3b82f6';
 };
 
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'long',
+    day: 'numeric', 
+    year: 'numeric'
+  });
+};
+
 const TaskDetails = ({ taskId, onEditTask }) => {
-  const task = taskId ? getTaskById(taskId) : null;
+  const { tasks, completeTask } = useTasks();
+  const [task, setTask] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Find the task in the tasks array when taskId changes
+  useEffect(() => {
+    if (taskId && tasks.length > 0) {
+      const foundTask = tasks.find(t => t.id === taskId);
+      setTask(foundTask || null);
+    } else {
+      setTask(null);
+    }
+  }, [taskId, tasks]);
+  
+  // Handle complete task action
+  const handleCompleteTask = async () => {
+    if (!task) return;
+    
+    try {
+      setLoading(true);
+      await completeTask(task.id);
+      // No need to update the task state here as it will be updated
+      // via the tasks state from useTasks when Firestore updates
+    } catch (error) {
+      console.error('Error completing task:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   if (!task) {
     return (
@@ -80,7 +94,7 @@ const TaskDetails = ({ taskId, onEditTask }) => {
         
         <div className="mb-4">
           <p className="text-gray-500 text-sm mb-1">Due Date</p>
-          <p className="text-gray-800">{task.dueDate}</p>
+          <p className="text-gray-800">{formatDate(task.dueDate)}</p>
         </div>
         
         <div className="mb-6">
@@ -93,17 +107,41 @@ const TaskDetails = ({ taskId, onEditTask }) => {
           </div>
         </div>
         
+        {task.status === 'completed' && (
+          <div className="mb-6">
+            <p className="text-gray-500 text-sm mb-1">Status</p>
+            <div className="bg-green-100 text-green-800 text-sm rounded-full px-3 py-1 inline-block w-fit">
+              COMPLETED
+            </div>
+          </div>
+        )}
+        
+        {task.rolloverCount > 0 && (
+          <div className="mb-6">
+            <p className="text-gray-500 text-sm mb-1">Rollover Count</p>
+            <div className="bg-amber-100 text-amber-800 text-sm rounded-full px-3 py-1 inline-block w-fit">
+              {task.rolloverCount} {task.rolloverCount === 1 ? 'day' : 'days'}
+            </div>
+          </div>
+        )}
+        
         <div className="mb-6">
           <p className="text-gray-500 text-sm mb-1">Description</p>
           <div className="bg-gray-100 rounded-lg p-4 text-gray-800 text-sm">
-            {task.description}
+            {task.description || 'No description provided.'}
           </div>
         </div>
         
         <div className="mt-auto space-y-3">
-          <button className="w-full py-2 bg-gray-700 hover:bg-gray-800 transition-colors text-white rounded font-medium">
-            Complete Task
-          </button>
+          {task.status !== 'completed' && (
+            <button 
+              onClick={handleCompleteTask}
+              disabled={loading}
+              className="w-full py-2 bg-gray-700 hover:bg-gray-800 transition-colors text-white rounded font-medium"
+            >
+              {loading ? 'Completing...' : 'Complete Task'}
+            </button>
+          )}
           <button 
             onClick={() => onEditTask(task)}
             className="w-full py-2 bg-gray-300 hover:bg-gray-400 transition-colors text-gray-700 rounded"

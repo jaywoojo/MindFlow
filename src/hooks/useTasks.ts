@@ -1,5 +1,5 @@
 // src/hooks/useTasks.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   collection, 
   query, 
@@ -9,7 +9,8 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  getDocs
+  getDocs,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -20,46 +21,59 @@ export function useTasks() {
   const { currentUser } = useAuth();
   
   // Load tasks for the current user
-  useEffect(() => {
-    async function loadTasks() {
-      if (!currentUser) {
-        setTasks([]);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const tasksQuery = query(
-          collection(db, `users/${currentUser.uid}/tasks`),
-          orderBy('createdAt', 'desc')
-        );
-        
-        const querySnapshot = await getDocs(tasksQuery);
-        const tasksData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        setTasks(tasksData);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading tasks:', error);
-        setLoading(false);
-      }
+  const loadTasks = useCallback(async () => {
+    if (!currentUser) {
+      setTasks([]);
+      setLoading(false);
+      return;
     }
     
-    loadTasks();
+    try {
+      const tasksQuery = query(
+        collection(db, `users/${currentUser.uid}/tasks`),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(tasksQuery);
+      const tasksData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Convert Firestore timestamps to ISO string if they exist
+        createdAt: doc.data().createdAt?.toDate().toISOString() || new Date().toISOString(),
+        dueDate: doc.data().dueDate?.toDate?.() 
+          ? doc.data().dueDate.toDate().toISOString()
+          : doc.data().dueDate || new Date().toISOString(),
+        completedAt: doc.data().completedAt?.toDate?.() 
+          ? doc.data().completedAt.toDate().toISOString()
+          : doc.data().completedAt
+      }));
+      
+      setTasks(tasksData);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+      setLoading(false);
+    }
   }, [currentUser]);
+  
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
   
   // Add a new task
   async function addTask(task) {
     if (!currentUser) return;
     
     try {
+      // Convert date strings to Firestore timestamps
+      const dueDate = new Date(task.dueDate);
+      
       const taskData = {
         ...task,
-        createdAt: new Date(),
-        status: 'active'
+        createdAt: Timestamp.now(),
+        dueDate: Timestamp.fromDate(dueDate),
+        status: 'active',
+        rolloverCount: 0
       };
       
       const docRef = await addDoc(
@@ -67,10 +81,15 @@ export function useTasks() {
         taskData
       );
       
-      setTasks(prevTasks => [
-        { id: docRef.id, ...taskData },
-        ...prevTasks
-      ]);
+      // Convert Firestore timestamps to ISO strings for local state
+      const newTask = {
+        id: docRef.id,
+        ...taskData,
+        createdAt: taskData.createdAt.toDate().toISOString(),
+        dueDate: taskData.dueDate.toDate().toISOString()
+      };
+      
+      setTasks(prevTasks => [newTask, ...prevTasks]);
       
       return docRef.id;
     } catch (error) {
@@ -85,12 +104,31 @@ export function useTasks() {
     
     try {
       const taskRef = doc(db, `users/${currentUser.uid}/tasks`, taskId);
-      await updateDoc(taskRef, updatedData);
       
+      // Convert date strings to Firestore timestamps if present
+      const firestoreData = { ...updatedData };
+      
+      if (firestoreData.dueDate) {
+        firestoreData.dueDate = Timestamp.fromDate(new Date(firestoreData.dueDate));
+      }
+      
+      await updateDoc(taskRef, firestoreData);
+      
+      // Update local state
       setTasks(prevTasks => 
-        prevTasks.map(task => 
-          task.id === taskId ? { ...task, ...updatedData } : task
-        )
+        prevTasks.map(task => {
+          if (task.id === taskId) {
+            // Convert any Firestore timestamps back to ISO strings
+            const updatedTask = { ...task, ...updatedData };
+            
+            if (firestoreData.dueDate) {
+              updatedTask.dueDate = new Date(updatedData.dueDate).toISOString();
+            }
+            
+            return updatedTask;
+          }
+          return task;
+        })
       );
     } catch (error) {
       console.error('Error updating task:', error);
@@ -100,10 +138,32 @@ export function useTasks() {
   
   // Complete a task
   async function completeTask(taskId) {
-    return updateTask(taskId, { 
-      status: 'completed',
-      completedAt: new Date()
-    });
+    if (!currentUser) return;
+    
+    try {
+      const taskRef = doc(db, `users/${currentUser.uid}/tasks`, taskId);
+      const completedAt = Timestamp.now();
+      
+      await updateDoc(taskRef, { 
+        status: 'completed',
+        completedAt
+      });
+      
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId 
+            ? { 
+                ...task, 
+                status: 'completed', 
+                completedAt: completedAt.toDate().toISOString() 
+              } 
+            : task
+        )
+      );
+    } catch (error) {
+      console.error('Error completing task:', error);
+      throw error;
+    }
   }
   
   // Delete a task
@@ -121,7 +181,7 @@ export function useTasks() {
   
   // Get tasks for a specific date
   function getTasksForDate(date) {
-    const dateString = date.toDateString();
+    const dateString = new Date(date).toDateString();
     return tasks.filter(task => {
       const taskDate = new Date(task.dueDate).toDateString();
       return taskDate === dateString;
@@ -148,11 +208,20 @@ export function useTasks() {
     // Roll over each task
     for (const task of overdueTasks) {
       const rolloverCount = (task.rolloverCount || 0) + 1;
-      await updateTask(task.id, {
-        dueDate: today.toISOString(),
+      
+      const taskRef = doc(db, `users/${currentUser.uid}/tasks`, task.id);
+      await updateDoc(taskRef, {
+        dueDate: Timestamp.fromDate(today),
         rolloverCount
       });
     }
+    
+    // Reload tasks to reflect the changes
+    if (overdueTasks.length > 0) {
+      await loadTasks();
+    }
+    
+    return overdueTasks.length;
   }
   
   return {
