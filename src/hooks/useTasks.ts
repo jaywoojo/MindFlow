@@ -30,8 +30,7 @@ export function useTasks() {
       
       try {
         const tasksQuery = query(
-          collection(db, 'tasks'),
-          where('userId', '==', currentUser.uid),
+          collection(db, `users/${currentUser.uid}/tasks`),
           orderBy('createdAt', 'desc')
         );
         
@@ -59,12 +58,14 @@ export function useTasks() {
     try {
       const taskData = {
         ...task,
-        userId: currentUser.uid,
         createdAt: new Date(),
         status: 'active'
       };
       
-      const docRef = await addDoc(collection(db, 'tasks'), taskData);
+      const docRef = await addDoc(
+        collection(db, `users/${currentUser.uid}/tasks`), 
+        taskData
+      );
       
       setTasks(prevTasks => [
         { id: docRef.id, ...taskData },
@@ -83,7 +84,7 @@ export function useTasks() {
     if (!currentUser) return;
     
     try {
-      const taskRef = doc(db, 'tasks', taskId);
+      const taskRef = doc(db, `users/${currentUser.uid}/tasks`, taskId);
       await updateDoc(taskRef, updatedData);
       
       setTasks(prevTasks => 
@@ -110,7 +111,7 @@ export function useTasks() {
     if (!currentUser) return;
     
     try {
-      await deleteDoc(doc(db, 'tasks', taskId));
+      await deleteDoc(doc(db, `users/${currentUser.uid}/tasks`, taskId));
       setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
     } catch (error) {
       console.error('Error deleting task:', error);

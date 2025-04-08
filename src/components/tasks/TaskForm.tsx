@@ -1,5 +1,6 @@
-// src/components/tasks/TaskForm.jsx
+// src/components/tasks/TaskForm.tsx
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 
 const TaskForm = ({ onClose, onSubmit, initialData }) => {
   const [formData, setFormData] = useState({
@@ -55,8 +56,20 @@ const TaskForm = ({ onClose, onSubmit, initialData }) => {
   };
   
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-20 backdrop-blur-sm z-10">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+    <motion.div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div 
+        className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
         <h2 className="text-xl font-bold text-gray-800 mb-4">
           {initialData ? 'Edit Task' : 'Add New Task'}
         </h2>
@@ -145,7 +158,7 @@ const TaskForm = ({ onClose, onSubmit, initialData }) => {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              rows="3"
+              rows={3}
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
               placeholder="Add task details (optional)"
             ></textarea>
@@ -168,8 +181,18 @@ const TaskForm = ({ onClose, onSubmit, initialData }) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+        
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -48,7 +48,7 @@ const getPriorityColor = (priority) => {
   return colors[priority] || '#3b82f6';
 };
 
-const TaskDetails = ({ taskId }) => {
+const TaskDetails = ({ taskId, onEditTask }) => {
   const task = taskId ? getTaskById(taskId) : null;
   
   if (!task) {
@@ -104,7 +104,10 @@ const TaskDetails = ({ taskId }) => {
           <button className="w-full py-2 bg-gray-700 hover:bg-gray-800 transition-colors text-white rounded font-medium">
             Complete Task
           </button>
-          <button className="w-full py-2 bg-gray-300 hover:bg-gray-400 transition-colors text-gray-700 rounded">
+          <button 
+            onClick={() => onEditTask(task)}
+            className="w-full py-2 bg-gray-300 hover:bg-gray-400 transition-colors text-gray-700 rounded"
+          >
             Edit Task
           </button>
         </div>

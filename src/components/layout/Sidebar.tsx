@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const Sidebar = ({ onLogout }) => {
+// Updated to include onAddTask prop
+const Sidebar = ({ onLogout, onAddTask }) => {
   const { currentUser } = useAuth();
   const [tasksCompleted, setTasksCompleted] = useState(4);
   const [totalTasks, setTotalTasks] = useState(7);
@@ -16,13 +17,10 @@ const Sidebar = ({ onLogout }) => {
   const photoURL = currentUser?.photoURL;
 
   return (
-   /*  <aside className="w-64 min-h-screen bg-slate-800 overflow-y-auto">
-      <div className="flex flex-col min-h-screen p-6"> */
-
     <aside className="w-64 min-h-screen overflow-y-auto glass-effect">
       <div className="flex flex-col h-full p-6">
-      {/* App Logo */}
-      <div className="flex items-center mb-10">
+        {/* App Logo */}
+        <div className="flex items-center mb-10">
           <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
             <BrainCircuit className="h-6 w-6 text-white" />
           </div>
@@ -86,7 +84,10 @@ const Sidebar = ({ onLogout }) => {
 
         {/* Add Task Button */}
         <div className="mt-auto">
-          <button className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center mx-auto hover:bg-gray-800 transition-colors">
+          <button 
+            onClick={onAddTask}
+            className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center mx-auto hover:bg-gray-800 transition-colors"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
