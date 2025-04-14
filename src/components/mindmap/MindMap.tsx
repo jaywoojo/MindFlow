@@ -7,15 +7,19 @@ import { useTasks } from '../../hooks/useTasks';
 const MindMap = ({ onSelectTask }) => {
   const svgRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const { tasks, loading } = useTasks();
+  const { tasks, loading, categories, getCategoryById } = useTasks();
   const [selectedDate, setSelectedDate] = useState(new Date());
   
-  // Date navigation - previous 2 days, today, and next 3 days
-  const dateRange = Array.from({ length: 6 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - 2 + i);
-    return date;
-  });
+  // Date navigation - 5 days centered on the selected date (2 before, today, 2 after)
+  const getDateRange = (centerDate) => {
+    return Array.from({ length: 5 }, (_, i) => {
+      const date = new Date(centerDate);
+      date.setDate(date.getDate() - 2 + i);
+      return date;
+    });
+  };
+  
+  const [dateRange, setDateRange] = useState(getDateRange(selectedDate));
 
   useEffect(() => {
     // Handle window resize
@@ -35,40 +39,31 @@ const MindMap = ({ onSelectTask }) => {
   }, []);
 
   useEffect(() => {
-    if (!dimensions.width || !dimensions.height || loading) return;
+    if (!dimensions.width || !dimensions.height || loading || !tasks.length) return;
 
     // Transform the tasks data into the hierarchical structure needed for the mind map
     const transformTasksToMindMapData = () => {
-      // Get all unique categories from tasks
-      const categories = [...new Set(tasks.map(task => task.category))];
+      // Create a map of categoryId to category objects for quick lookup
+      const categoryMap = new Map();
+      categories.forEach(category => {
+        categoryMap.set(category.id, {
+          id: category.id,
+          name: category.name,
+          color: category.color,
+          tasks: []
+        });
+      });
       
-      // Create the hierarchical structure
-      const data = {
-        id: 'today',
-        name: 'TODAY',
-        type: 'central',
-        children: categories.map(category => {
-          // Filter tasks by category and the selected date
-          const categoryTasks = tasks.filter(task => {
-            const taskDate = new Date(task.dueDate);
-            const selectedDateStr = selectedDate.toDateString();
-            const taskDateStr = taskDate.toDateString();
-            
-            return task.category === category && taskDateStr === selectedDateStr;
-          });
-          
-          // Skip empty categories
-          if (categoryTasks.length === 0) return null;
-          
-          // Get color based on category
-          const color = getCategoryColor(category);
-          
-          return {
-            id: category,
-            name: category.toUpperCase(),
-            type: 'category',
-            color,
-            children: categoryTasks.map(task => ({
+      // Group tasks by category for the selected date
+      tasks.forEach(task => {
+        const taskDate = new Date(task.dueDate);
+        const selectedDateStr = selectedDate.toDateString();
+        const taskDateStr = taskDate.toDateString();
+        
+        if (taskDateStr === selectedDateStr && task.categoryId) {
+          const category = categoryMap.get(task.categoryId);
+          if (category) {
+            category.tasks.push({
               id: task.id,
               name: task.title,
               type: 'task',
@@ -76,9 +71,27 @@ const MindMap = ({ onSelectTask }) => {
               rolloverCount: task.rolloverCount,
               dueDate: task.dueDate,
               priority: task.priority
-            }))
-          };
-        }).filter(Boolean) // Remove null categories (empty ones)
+            });
+          }
+        }
+      });
+      
+      // Filter out categories with no tasks
+      const categoriesWithTasks = Array.from(categoryMap.values())
+        .filter(category => category.tasks.length > 0);
+      
+      // Create the hierarchical structure
+      const data = {
+        id: 'today',
+        name: 'TODAY',
+        type: 'central',
+        children: categoriesWithTasks.map(category => ({
+          id: category.id,
+          name: category.name.toUpperCase(),
+          type: 'category',
+          color: category.color,
+          children: category.tasks
+        }))
       };
       
       return data;
@@ -136,14 +149,14 @@ const MindMap = ({ onSelectTask }) => {
     // Set initial zoom level to fit nicely in the viewport
     const initialScale = 0.9;
     const initialX = dimensions.width / 2 * (1 - initialScale);
-    const initialY = dimensions.height / 2 * (1 - initialScale);
+    const initialY = (dimensions.height / 2 + 30) * (1 - initialScale); // Adjusted for new center position
     svg.call(zoom.transform, d3.zoomIdentity
       .translate(initialX, initialY)
       .scale(initialScale));
     
     // Center of the visualization
     const centerX = dimensions.width / 2;
-    const centerY = dimensions.height / 2;
+    const centerY = dimensions.height / 2 + 30; // Moved down to account for date nav bar at top
     
     // Radius settings
     const centralRadius = 40;
@@ -276,8 +289,8 @@ const MindMap = ({ onSelectTask }) => {
             .attr('height', taskHeight)
             .attr('rx', taskHeight/2)  // Rounded corners
             .attr('ry', taskHeight/2)
-            .attr('fill', category.color)
-            .attr('opacity', task.status === 'completed' ? 0.7 : 1);
+            .attr('fill', task.status === 'completed' ? '#99A1AF' : category.color)  // Dark gray for completed tasks
+            .attr('opacity', 1);
           
           // Task name (with strikethrough if completed)
           taskGroup.append('text')
@@ -346,13 +359,13 @@ const MindMap = ({ onSelectTask }) => {
           
           // Add check mark for completed tasks
           if (task.status === 'completed') {
-            const checkX = taskX + (pillWidth/2) - 10;
-            const checkY = taskY - (taskHeight/2) + 7;
+            const checkX = taskX + (pillWidth/2) - 3; // -10
+            const checkY = taskY - (taskHeight/2) + 2; // +7
             
             taskGroup.append('circle')
               .attr('cx', checkX)
               .attr('cy', checkY)
-              .attr('r', 7)
+              .attr('r', 10) //7
               .attr('fill', '#10b981');  // Green for checkmarks
             
             taskGroup.append('text')
@@ -361,13 +374,13 @@ const MindMap = ({ onSelectTask }) => {
               .attr('text-anchor', 'middle')
               .attr('dominant-baseline', 'middle')
               .attr('fill', '#f3f4f6')
-              .attr('font-weight', 'bold')
-              .attr('font-size', '9px')
+              .attr('font-weight', 'bolder')
+              .attr('font-size', '12px') //9
               .text('✓');
           }
           
-          // Add additional information below tasks
-          if (task.rolloverCount) {
+          // Add additional information for tasks
+          /* if (task.rolloverCount) {
             taskGroup.append('text')
               .attr('x', taskX)
               .attr('y', taskY + taskHeight/2 + 12)
@@ -375,35 +388,60 @@ const MindMap = ({ onSelectTask }) => {
               .attr('fill', 'rgba(0, 0, 0, 0.6)')
               .attr('font-size', '9px')
               .text(`${task.rolloverCount} days rollover`);
-          } else if (task.priority === 'high') {
+          } */
+          
+          // Add high or medium priority indicator above the task pill
+          if (task.status !== 'completed' && (task.priority === 'high' || task.priority === 'medium')) {
+            // Create a warning icon above the task
+            const iconY = taskY - taskHeight/2 - 12; // -10
+            const iconColor = task.priority === 'high' ? '#ef4444' : '#fbbf24'; // red for high, yellow-400 for medium
+            
+            // Add colored circle background
+            taskGroup.append('circle')
+              .attr('cx', taskX)
+              .attr('cy', iconY)
+              .attr('r', 10) // 8
+              .attr('fill', iconColor);
+            
+            // Add exclamation mark
             taskGroup.append('text')
               .attr('x', taskX)
-              .attr('y', taskY + taskHeight/2 + 12)
+              .attr('y', iconY)
               .attr('text-anchor', 'middle')
-              .attr('fill', '#ef4444')
-              .attr('font-size', '9px')
-              .attr('font-weight', 'bold')
-              .text(`HIGH PRIORITY`);
+              .attr('dominant-baseline', 'middle')
+              .attr('fill', 'white')
+              .attr('font-size', '14px') //10
+              .attr('font-weight', 'bolder') //bold
+              .text('!');
           }
+          
+          /* // Add check mark for completed tasks (now outside the pill)
+          if (task.status === 'completed') {
+            const checkX = taskX + (pillWidth/2) + 12; // Move further right, outside the pill
+            const checkY = taskY - (taskHeight/2) - 6; // Move up, outside the pill
+            
+            taskGroup.append('circle')
+              .attr('cx', checkX)
+              .attr('cy', checkY)
+              .attr('r', 8)
+              .attr('fill', '#10b981');  // Green for checkmarks
+            
+            taskGroup.append('text')
+              .attr('x', checkX)
+              .attr('y', checkY)
+              .attr('text-anchor', 'middle')
+              .attr('dominant-baseline', 'middle')
+              .attr('fill', '#ffffff')
+              .attr('font-weight', 'bold')
+              .attr('font-size', '10px')
+              .text('✓');
+          } */
         });
       }
     });
-  }, [dimensions, tasks, loading, selectedDate, onSelectTask]);
+  }, [dimensions, tasks, categories, selectedDate, onSelectTask, loading]);
 
   // Helper functions
-  const getCategoryColor = (category) => {
-    const colors = {
-      work: '#8b5cf6',
-      personal: '#ec4899',
-      health: '#10b981',
-      finance: '#ef4444',
-      learning: '#f59e0b',
-      projects: '#4f46e5'
-    };
-    
-    return colors[category] || '#3b82f6';
-  };
-
   const createDotGridBackground = (svg, dimensions) => {
     // Create dot grid pattern
     const defs = svg.append('defs');
@@ -447,42 +485,97 @@ const MindMap = ({ onSelectTask }) => {
     
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+  
+  // Check if a date is today
+  const isToday = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
+    return compareDate.getTime() === today.getTime();
+  };
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
+    setDateRange(getDateRange(date));
+  };
+  
+  // Navigate to previous or next date range
+  const navigateDates = (direction) => {
+    const newCenterDate = new Date(selectedDate);
+    newCenterDate.setDate(newCenterDate.getDate() + (direction * 5));
+    setSelectedDate(newCenterDate);
+    setDateRange(getDateRange(newCenterDate));
   };
 
   return (
     <motion.div 
-      className="w-full h-full"
+      className="w-full h-full relative"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <svg ref={svgRef} width="100%" height="100%" className="bg-gray-100" />
-      
-      {/* Timeline navigation */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-full px-4 py-2 flex space-x-8 shadow-md">
-        {dateRange.map((date, index) => {
-          const isSelected = date.toDateString() === selectedDate.toDateString();
-          return (
-            <div 
-              key={index} 
-              className="flex flex-col items-center cursor-pointer"
-              onClick={() => handleDateChange(date)}
-            >
+      {/* Date navigation - Now at the top */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white rounded-full px-6 py-3 flex items-center shadow-md z-10">
+        {/* Previous button */}
+        <button 
+          onClick={() => navigateDates(-1)} 
+          className="mr-4 text-gray-700 hover:text-gray-900 focus:outline-none"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </button>
+        
+        {/* Date Pills */}
+        <div className="flex space-x-4">
+          {dateRange.map((date, index) => {
+            const isSelected = date.toDateString() === selectedDate.toDateString();
+            const dateIsToday = isToday(date);
+            const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+            
+            return (
               <div 
-                className={`w-5 h-5 rounded-full ${isSelected ? 'bg-gray-700' : 'bg-gray-300'} flex items-center justify-center text-xs`}
+                key={index} 
+                className="flex flex-col items-center cursor-pointer"
+                onClick={() => handleDateChange(date)}
               >
-                {date.getDate()}
+                <div className={`text-xs ${isSelected ? 'text-gray-900 font-medium' : 'text-gray-500'} mb-1`}>
+                  {dayName}
+                </div>
+                <div 
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs
+                    ${isSelected ? 'bg-gray-100 ring-2 ring-gray-600 text-gray-900 font-medium' : 'bg-gray-200 text-gray-700'}
+                    ${dateIsToday ? 'ring-2 ring-blue-500' : ''}
+                  `}
+                >
+                  {date.getDate()}
+                </div>
+                <span className={`text-xs mt-1 
+                  ${isSelected ? 'text-gray-900 font-medium' : 'text-gray-500'}
+                  ${dateIsToday ? 'text-blue-600 font-medium' : ''}
+                `}>
+                  {formatDateDisplay(date)}
+                </span>
               </div>
-              <span className={`text-xs mt-1 ${isSelected ? 'text-gray-800' : 'text-gray-500'}`}>
-                {formatDateDisplay(date)}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        
+        {/* Next button */}
+        <button 
+          onClick={() => navigateDates(1)} 
+          className="ml-4 text-gray-700 hover:text-gray-900 focus:outline-none"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </button>
       </div>
+      
+      <svg ref={svgRef} width="100%" height="100%" className="bg-gray-100" />
     </motion.div>
   );
 };

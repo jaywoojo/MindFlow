@@ -109,11 +109,12 @@ const Sidebar = ({ onLogout, onAddTask }) => {
         <div className="mt-auto">
           <button 
             onClick={onAddTask}
-            className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center mx-auto hover:bg-gray-800 transition-colors"
+            className="w-full py-2 px-4 bg-gray-700 rounded flex items-center justify-center hover:bg-gray-800 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
+            <span className="text-white font-medium">Add Task</span>
           </button>
         </div>
       </div>
