@@ -6,14 +6,14 @@ Productivity, Visualized.
 A graph-based task management app that brings clarity to your chaos.  
 
 <div align="center">
-  <img src="./src/assets/readme-images/login-page.png" width="300" alt=""/>
+  <img src="./src/assets/readme-images/login-page.png" width="800" alt=""/>
 </div>
 
 <div align="center">
-  <img src="./src/assets/readme-images/mindmap_1.png" width="300" alt=""/>
-  <img src="./src/assets/readme-images/mindmap_2.png" width="300" alt=""/>
-  <img src="./src/assets/readme-images/mindmap_3.png" width="300" alt=""/>
-  <img src="./src/assets/readme-images/mindmap_4.png" width="300" alt=""/>
+  <img src="./src/assets/readme-images/mindmap_1.png" width="400" alt=""/>
+  <img src="./src/assets/readme-images/mindmap_2.png" width="400" alt=""/>
+  <img src="./src/assets/readme-images/mindmap_3.png" width="400" alt=""/>
+  <img src="./src/assets/readme-images/mindmap_4.png" width="800" alt=""/>
 </div>
 
 ## 💡 Overview
