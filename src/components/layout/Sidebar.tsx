@@ -1,8 +1,10 @@
 // src/components/layout/Sidebar.tsx
 import { useState, useEffect } from 'react';
-import { BrainCircuit } from 'lucide-react';
+// import { BrainCircuit } from 'lucide-react'; // Comment out the old icon
 import { useAuth } from '../../context/AuthContext';
 import { useTasks } from '../../hooks/useTasks';
+// Import the logo from assets
+import MindFlowLogo from '../../assets/mindflow-logo-thicker.png'; // Adjust path as needed
 
 const Sidebar = ({ onLogout, onAddTask }) => {
   const { currentUser } = useAuth();
@@ -16,6 +18,9 @@ const Sidebar = ({ onLogout, onAddTask }) => {
   // Get the user's name and photo URL from their Google profile
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User';
   const photoURL = currentUser?.photoURL;
+  
+  // Create a proxied URL to bypass CORS restrictions
+  const proxyPhotoURL = photoURL ? `https://images.weserv.nl/?url=${encodeURIComponent(photoURL)}` : null;
 
   // Calculate task statistics
   useEffect(() => {
@@ -50,19 +55,26 @@ const Sidebar = ({ onLogout, onAddTask }) => {
   return (
     <aside className="w-64 min-h-screen overflow-y-auto glass-effect">
       <div className="flex flex-col h-full p-6">
-        {/* App Logo */}
+        {/* App Logo - Updated to use the MindFlow logo */}
         <div className="flex items-center mb-10">
-          <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
+          {/* Comment out the old logo
+          <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center">
             <BrainCircuit className="h-6 w-6 text-white" />
           </div>
-          <h1 className="ml-3 text-xl font-bold text-gray-800">MindFlow</h1>
+          */}
+          <img 
+            src={MindFlowLogo} 
+            alt="MindFlow Logo" 
+            className="h-10 w-10 object-contain"
+          />
+          <h1 className="ml-2 text-xl font-bold text-gray-800">MindFlow</h1>
         </div>
 
         {/* User Profile */}
         <div className="flex flex-col items-center mb-8">
           {photoURL ? (
             <img 
-              src={photoURL} 
+              src={proxyPhotoURL} 
               alt="Profile" 
               className="w-20 h-20 rounded-full mb-3 object-cover border-2 border-gray-300"
             />

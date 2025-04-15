@@ -1,11 +1,14 @@
 // src/components/layout/TaskDetails.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useTasks } from '../../hooks/useTasks';
+import ConfirmModal from '../ui/ConfirmModal';
 
 const TaskDetails = ({ taskId }) => {
-  const { tasks, completeTask, updateTask, categories, updateCategory, deleteCategory, addCategory, getCategoryById } = useTasks();
+  const { tasks, completeTask, updateTask, categories, updateCategory, deleteCategory, addCategory, getCategoryById, deleteTask } = useTasks();
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingField, setEditingField] = useState(null);
   const [titleValue, setTitleValue] = useState('');
   const [descriptionValue, setDescriptionValue] = useState('');
@@ -18,7 +21,7 @@ const TaskDetails = ({ taskId }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [newCategoryValue, setNewCategoryValue] = useState('');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
-  const [detailsWidth, setDetailsWidth] = useState(315); // Default width // 256
+  const [detailsWidth, setDetailsWidth] = useState(315); // Default width
   const titleRef = useRef(null);
   const descriptionRef = useRef(null);
   const categoryInputRef = useRef(null);
@@ -31,6 +34,10 @@ const TaskDetails = ({ taskId }) => {
 
   // Find the task in the tasks array when taskId changes
   useEffect(() => {
+    // Reset states when taskId changes
+    setDeleteLoading(false);
+    setShowDeleteConfirm(false);
+    
     if (taskId && tasks.length > 0) {
       const foundTask = tasks.find(t => t.id === taskId);
       setTask(foundTask || null);
@@ -136,6 +143,28 @@ const TaskDetails = ({ taskId }) => {
       console.error('Error completing task:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Show delete confirmation modal
+  const handleDeleteTask = () => {
+    setShowDeleteConfirm(true);
+  };
+  
+  // Execute actual deletion after confirmation
+  const confirmDelete = async () => {
+    if (!task) return;
+    
+    try {
+      setDeleteLoading(true);
+      await deleteTask(task.id);
+      // Reset the loading state after deletion
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -494,8 +523,6 @@ const TaskDetails = ({ taskId }) => {
                             <div className="p-2 border-t border-gray-200">
                               <p className="text-xs text-gray-500 mb-1">Colors</p>
                               <div className="flex flex-wrap gap-1">
-                                {/* {['#c4b5fa', '#fca5cf', '#86efac', '#fca5a5', '#fcd34d', '#a5b4fc', '#bfdbfe', '#e7e5e4'].map(color => ( */}
-                                {/* {['#7c3aed', '#db2777', '#10b981', '#dc2626', '#d97706', '#4f46e5', '#3b82f6', '#44403c'].map(color => ( */}
                                 {['#f87171', '#fb923c', '#ffdf20', '#4ade80', '#60a5fa', '#818cf8', '#a78bfa', '#f472b6', '#e7e5e4'].map(color => (
                                   <div 
                                     key={color}
@@ -672,21 +699,7 @@ const TaskDetails = ({ taskId }) => {
             </div>
           </div>
           
-          {/* Rollover Count */}
-          {task.rolloverCount > 0 && (
-            <div className="mb-5">
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-500 text-sm w-24">Rollover Count</p>
-                <div className="flex-1 text-gray-800 rounded text-sm py-1.5 px-2 bg-gray-100">
-                  <span className="rounded px-2 py-0.5 inline-block bg-amber-200">
-                    {task.rolloverCount} {task.rolloverCount === 1 ? 'day' : 'days'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Description Field */}
+          {/* Description Field with word-wrap and newline preservation */}
           <div className="mb-6">
             <p className="text-gray-500 text-sm mb-2">Description</p>
             
@@ -697,12 +710,12 @@ const TaskDetails = ({ taskId }) => {
                 onChange={handleDescriptionChange}
                 onBlur={handleDescriptionSave}
                 rows={3}
-                className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-800"
+                className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-800 whitespace-pre-wrap break-words"
                 placeholder="Add a description..."
               ></textarea>
             ) : (
               <div 
-                className="bg-gray-100 rounded p-4 text-gray-800 text-sm cursor-text min-h-[80px]"
+                className="bg-gray-100 rounded p-4 text-gray-800 text-sm cursor-text min-h-[80px] whitespace-pre-wrap break-words"
                 onClick={() => setEditingField('description')}
               >
                 {task.description || 'Add a description...'}
@@ -710,9 +723,10 @@ const TaskDetails = ({ taskId }) => {
             )}
           </div>
           
-          {/* Complete Task Button (only if not completed) */}
-          {task.status !== 'completed' && (
-            <div className="mt-auto">
+          {/* Action Buttons */}
+          <div className="mt-auto flex flex-col space-y-2">
+            {/* Complete Task Button (only if not completed) */}
+            {task.status !== 'completed' && (
               <button 
                 onClick={handleCompleteTask}
                 disabled={loading}
@@ -720,10 +734,31 @@ const TaskDetails = ({ taskId }) => {
               >
                 {loading ? 'Completing...' : 'Complete Task'}
               </button>
-            </div>
-          )}
+            )}
+            
+            {/* Delete Task Button */}
+            <button 
+              onClick={handleDeleteTask}
+              disabled={deleteLoading}
+              className="w-full text-white py-2 bg-red-400 hover:bg-red-500 transition-colors rounded font-medium"
+            >
+              Delete Task
+            </button>
+          </div>
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Task"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText={deleteLoading ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        danger={true}
+      />
     </div>
   );
 };

@@ -39,7 +39,79 @@ const MindMap = ({ onSelectTask }) => {
   }, []);
 
   useEffect(() => {
-    if (!dimensions.width || !dimensions.height || loading || !tasks.length) return;
+    if (!dimensions.width || !dimensions.height) return;
+
+    // Clear previous SVG content
+    d3.select(svgRef.current).selectAll('*').remove();
+    
+    // Create SVG
+    const svg = d3.select(svgRef.current);
+    
+    // Create dot grid background - Always render this regardless of tasks
+    createDotGridBackground(svg, dimensions);
+    
+    // If still loading or no tasks/categories, just render the central node
+    if (loading || !tasks.length) {
+      // Create a container group for zoom
+      const g = svg.append('g');
+      
+      // Add zoom behavior
+      const zoom = d3.zoom()
+        .scaleExtent([0.5, 2])  // Min/max zoom scale
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform);
+        });
+      
+      svg.call(zoom);
+      
+      // Set initial zoom level to fit nicely in the viewport
+      const initialScale = 0.9;
+      const initialX = dimensions.width / 2 * (1 - initialScale);
+      const initialY = (dimensions.height / 2 + 30) * (1 - initialScale); // Adjusted for new center position
+      svg.call(zoom.transform, d3.zoomIdentity
+        .translate(initialX, initialY)
+        .scale(initialScale));
+      
+      // Center of the visualization
+      const centerX = dimensions.width / 2;
+      const centerY = dimensions.height / 2 + 30; // Moved down to account for date nav bar at top
+      
+      // Radius settings
+      const centralRadius = 40;
+      
+      // Create central node - always show this regardless of tasks
+      const nodesLayer = g.append('g').attr('class', 'nodes-layer');
+      
+      nodesLayer.append('circle')
+        .attr('cx', centerX)
+        .attr('cy', centerY)
+        .attr('r', centralRadius)
+        .attr('fill', '#4b5563')
+        .attr('class', 'central-node');
+        
+      nodesLayer.append('text')
+        .attr('x', centerX)
+        .attr('y', centerY)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('fill', '#f3f4f6')
+        .attr('font-weight', 'bold')
+        .attr('font-size', '16px')
+        .text(formatDateDisplay(selectedDate));
+      
+      // Add "No tasks" message if we're not loading but have no tasks
+      if (!loading) {
+        svg.append('text')
+          .attr('x', dimensions.width / 2)
+          .attr('y', dimensions.height / 2 + 110) // Below the central node
+          .attr('text-anchor', 'middle')
+          .attr('font-size', '16px')
+          .attr('fill', '#6b7280')
+          .text('No tasks for this day. Add a task to get started!');
+      }
+      
+      return;
+    }
 
     // Transform the tasks data into the hierarchical structure needed for the mind map
     const transformTasksToMindMapData = () => {
@@ -103,36 +175,8 @@ const MindMap = ({ onSelectTask }) => {
       return text.slice(0, maxLength) + '...';
     };
 
-    // Clear previous SVG content
-    d3.select(svgRef.current).selectAll('*').remove();
-
     // Get the transformed data
     const data = transformTasksToMindMapData();
-    
-    // If there are no children (no categories with tasks), show a message
-    if (data.children.length === 0) {
-      const svg = d3.select(svgRef.current);
-      
-      // Add dot grid background
-      createDotGridBackground(svg, dimensions);
-      
-      // Add "No tasks" message
-      svg.append('text')
-        .attr('x', dimensions.width / 2)
-        .attr('y', dimensions.height / 2)
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '16px')
-        .attr('fill', '#6b7280')
-        .text('No tasks for this day. Add a task to get started!');
-        
-      return;
-    }
-
-    // Create SVG
-    const svg = d3.select(svgRef.current);
-    
-    // Create dot grid background
-    createDotGridBackground(svg, dimensions);
     
     // Create a container group for zoom
     const g = svg.append('g');
@@ -188,6 +232,20 @@ const MindMap = ({ onSelectTask }) => {
       .attr('font-weight', 'bold')
       .attr('font-size', '16px')
       .text(formatDateDisplay(selectedDate));
+    
+    // If no categories with tasks, show a message but keep the central node
+    if (data.children.length === 0) {
+      // Add "No tasks" message
+      svg.append('text')
+        .attr('x', dimensions.width / 2)
+        .attr('y', dimensions.height / 2 + 90) // Below the central node
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '16px')
+        .attr('fill', '#6b7280')
+        .text('No tasks for this day. Add a task to get started!');
+        
+      return;
+    }
     
     // Calculate positions for category nodes
     data.children.forEach((category, i) => {
@@ -379,17 +437,6 @@ const MindMap = ({ onSelectTask }) => {
               .text('✓');
           }
           
-          // Add additional information for tasks
-          /* if (task.rolloverCount) {
-            taskGroup.append('text')
-              .attr('x', taskX)
-              .attr('y', taskY + taskHeight/2 + 12)
-              .attr('text-anchor', 'middle')
-              .attr('fill', 'rgba(0, 0, 0, 0.6)')
-              .attr('font-size', '9px')
-              .text(`${task.rolloverCount} days rollover`);
-          } */
-          
           // Add high or medium priority indicator above the task pill
           if (task.status !== 'completed' && (task.priority === 'high' || task.priority === 'medium')) {
             // Create a warning icon above the task
@@ -414,28 +461,6 @@ const MindMap = ({ onSelectTask }) => {
               .attr('font-weight', 'bolder') //bold
               .text('!');
           }
-          
-          /* // Add check mark for completed tasks (now outside the pill)
-          if (task.status === 'completed') {
-            const checkX = taskX + (pillWidth/2) + 12; // Move further right, outside the pill
-            const checkY = taskY - (taskHeight/2) - 6; // Move up, outside the pill
-            
-            taskGroup.append('circle')
-              .attr('cx', checkX)
-              .attr('cy', checkY)
-              .attr('r', 8)
-              .attr('fill', '#10b981');  // Green for checkmarks
-            
-            taskGroup.append('text')
-              .attr('x', checkX)
-              .attr('y', checkY)
-              .attr('text-anchor', 'middle')
-              .attr('dominant-baseline', 'middle')
-              .attr('fill', '#ffffff')
-              .attr('font-weight', 'bold')
-              .attr('font-size', '10px')
-              .text('✓');
-          } */
         });
       }
     });
